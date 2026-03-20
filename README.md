@@ -211,33 +211,6 @@ Summary log example (same structure, `raw_response` omitted from every source):
 
 ---
 
-## ✅ What's Working
-
-- 9 ASCII banners load randomly on startup
-- **Interactive menu** on launch — numbered options for single IOC, bulk file, or exit
-- **`-h` / `--help`** prints all CLI flags and usage examples
-- Table: white cells, coloured VERDICT column + verdict panel only (no expand)
-- OTX malware families capped at 4 + `(+N more)`
-- URLScan 400 / 429 errors handled cleanly
-- File path risk: human-readable findings (no raw booleans)
-- GreyNoise: clean findings strings (no raw `True`/`False`)
-- **Optional run logs** — `--log-raw` (full dump), `--log-summary` (parsed only), or no log (default)
-- Both log modes also available interactively from the menu after each analysis
-- All 11 API sources dispatched concurrently per IOC type
-
----
-
-## 🚧 Pending / Roadmap
-
-| Feature | Notes |
-|---|---|
-| Shodan | IP — open ports, device fingerprint |
-| Talos Intelligence | IP/Domain — sender reputation |
-| Export report | JSON / Markdown report per run |
-| History search | Query/filter past runs beyond raw log files |
-
----
-
 ## 🔑 API Keys Setup
 
 ```bash
@@ -249,4 +222,4 @@ The tool works with zero keys — missing sources display `~ NO KEY` in the verd
 
 ---
 
-*ArCHie AnAlyzeR — by Akshar*
+*ArCHie Analyzer — by Akshar*
