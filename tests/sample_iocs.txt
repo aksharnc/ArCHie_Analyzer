@@ -1,0 +1,34 @@
+# ArCHie Analyzer — Manual Test Preset
+# Run: python analyzer.py -f tests\sample_iocs.txt
+# All IOCs below are well-known public examples safe to query
+
+# --- IPv4 Addresses ---
+8.8.8.8
+45.33.32.156
+1.1.1.1
+
+# --- Hashes (MD5 / SHA1 / SHA256) ---
+44d88612fea8a8f36de82e1278abb02f
+cf8bd9dfddff007f75adf4c2be48005cea317c62
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+# --- Domains ---
+google.com
+evil.ru
+malware.wicar.org
+
+# --- URLs ---
+https://google.com
+https://malware.testing.google.test/testing/malware/
+
+# --- File Paths ---
+C:\Temp\payload.exe
+C:\Windows\System32\notepad.exe
+C:\Users\Public\malware.ps1
+
+# --- CVE ---
+CVE-2024-1234
+
+# --- Email ---
+attacker@evil.ru
+support@google.com

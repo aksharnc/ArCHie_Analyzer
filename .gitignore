@@ -1,0 +1,36 @@
+# ─── Secrets ──────────────────────────────────────────────────────────────────
+.env
+
+# ─── Python cache ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pycache
+
+# ─── Compiled Java bytecode ───────────────────────────────────────────────────
+SimpleProxy.class
+*.class
+
+# ─── Run logs (contain IOC data, not for public history) ──────────────────────
+output/logs/*.json
+
+# ─── Virtual environments ─────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env.bak
+
+# ─── OS junk ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── IDEs ─────────────────────────────────────────────────────────────────────
+.idea/
+*.swp
+*.swo
+
+# ─── Distribution / packaging ─────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/

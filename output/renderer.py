@@ -1,0 +1,362 @@
+"""
+output/renderer.py — Rich TUI renderer for ArCHie Analyzer.
+
+Handles:
+  - Per-source results table (SOURCE | VERDICT | KEY FINDINGS)
+  - Verdict box (always shown, lists agreeing sources + errors)
+  - Bulk summary table
+  - Startup banners (random ASCII art on each run)
+"""
+
+import random
+
+from rich.console import Console
+from rich.table   import Table
+from rich.panel   import Panel
+from rich.text    import Text
+from rich         import box
+
+console = Console()
+
+# ─── Verdict colour + emoji mapping ──────────────────────────────────────────
+
+_TUI_VERDICT = {
+    "malicious":  "█ MALICIOUS",
+    "suspicious": "▲ SUSPICIOUS",
+    "clean":      "✔ CLEAN",
+    "not_found":  "? NOT FOUND",
+    "skipped":    "~ NO KEY",
+    "info":       "i INFO",
+    "error":      "✖ ERROR",
+    "unknown":    "? UNKNOWN",
+}
+
+_VERDICT_COLOR = {
+    "malicious":  "red1",
+    "suspicious": "yellow1",
+    "clean":      "bright_green",
+    "not_found":  "cyan",
+    "skipped":    "yellow1",
+    "info":       "cyan",
+    "error":      "red1",
+    "unknown":    "dim",
+}
+
+# ─── ASCII Banners (random on startup) ────────────────────────────────────────
+
+_ASCII_BANNERS = [
+    # 1: Classic block letters
+    r"""
+    ___         _______ _     _       
+   /   | _ _   / ____/| |   | |_  ___ 
+  / /| || '_| | |     | |___| | |/ -_)
+ / /_/ _|_|   | |____ |  ___  | |  __/
+/_/|_|         \____|_|_|   |_|_|\___| """,
+
+    # 2: Double-bar style
+    r"""
+  ╔═╗┬─┐╔═╗╦ ╦┬┌─┐
+  ╠═╣├┬┘║  ╠═╣││ ─ 
+  ╩ ╩┴└─╚═╝╩ ╩┴└─┘
+  Threat Intelligence Analyzer""",
+
+    # 3: Stars and slashes
+    r"""
+  *=========================================*
+   / \  _ _  ___   _  _ _      
+  / _ \| '_|/ __| | || |_)___  
+ / /—\ \| | | (__  | __ | |/ -_)
+/_/   \_\_|  \___| |_||_|_|\___|
+  *===[ IOC Analyzer :: Threat Intel ]=====*""",
+
+    # 4: Pipe/bracket terminal style
+    r"""
+  +--[ ArCHie ]-----------------------------+
+  |  /\  _ _ ___  _  _ _          .        |
+  | /  \| '_/ __|| || (_) ___ ___(_)       |
+  |/ /\ \ | | (__ | __ | |/ -_)___|        |
+  /_/  \_\_|  \___||_||_|_|\___(_)         |
+  +--[ Threat Intel CLI :: v3.0 ]----------+""",
+
+    # 5 (NEW): Big letter A — clean slash-art
+    r"""
+      /\             /  \    ArCHie  Analyzer
+    / /\ \   ─────────────────────────────
+   / /  \ \   Threat Intelligence  •  v3.0
+  /_/    \_\   IOC  ·  Hash  ·  IP  ·  CVE""",
+
+    # 6: Minimal — /slash art
+    r"""
+     _  ____  ___  _  _ _ ___ 
+    /_\|  _ \/ __|| || |_) __|
+   / _ \ |_) | (__ | __ | |___ \
+  /_/ \_\ __/ \___||_||_|_|____/
+        |_|   :: IOC Triage CLI""",
+
+    # 7: Scan-line / matrix style
+    r"""
+  > INITIALIZING THREAT INTEL ENGINE...
+  +--------------------------------------+
+  |   ╔═╗╦═╗╔═╗╦ ╦╦╔═╗  /\ |\  | /\   |
+  |   ╠═╣╠╦╝║  ╠═╣║║╣  /--\| \ |/--\  |
+  |   ╩ ╩╩╚═╚═╝╩ ╩╩╚═╝/_/\_|  \/_/\_\ |
+  +--------------------------------------+
+  > MODULES LOADED. READY.""",
+
+    # 8 (NEW): Big letter A — filled hash block
+    r"""
+      ###           ##  ##    ArCHie  Analyzer
+     #####    ──────────────────────────────────
+    ## # ##    Threat Intelligence  •  v3.0
+   ##     ##   IOC  ·  Hash  ·  Domain  ·  CVE
+  ##       ##""",
+
+    # 9 (NEW): Big letter A — box-draw outline
+    r"""
+       ╱╲            ╱  ╲      r  C  H  i  e   A n a l y z e r
+     ╱ ╌╌ ╲   ─────────────────────────────────────────────────
+   ╱        ╲   Threat Intelligence CLI  •  v3.0
+ ╱╌╌╌╌╌╌╌╌╌╌╌╲  IOC  ┊  Hash  ┊  IP  ┊  CVE""",
+
+    # 10 (NEW): Big letter A — star sparkle
+    r"""
+    *            *   *     ArCHie  Analyzer
+   * *     ─────────────────────────────────
+  *   *     Threat Intelligence  •  v3.0
+ * * * * *   IOC  ┊  Hash  ┊  IP  ┊  CVE
+*         *""",
+]
+
+
+# ─── Banner ───────────────────────────────────────────────────────────────────
+
+def print_banner():
+    art  = random.choice(_ASCII_BANNERS)
+    text = Text()
+    text.append(art, style="bold bright_white")
+    text.append("\n  by Akshar  ", style="color(61)")
+    text.append("v3.0", style="medium_purple1")
+    text.append("  —  Threat Intel CLI", style="color(61)")
+    console.print(text)
+    console.print()
+
+
+# ─── IOC Header ───────────────────────────────────────────────────────────────
+
+def print_ioc_header(ioc):
+    console.print(f"  [bold white]IOC  [/bold white][dim]>>[/dim] [white]{ioc.value}[/white]")
+    console.print(f"  [bold white]TYPE [/bold white][dim]>>[/dim] {ioc.emoji}  [white]{ioc.display_label}[/white]")
+    console.print()
+
+
+# ─── Results Table ────────────────────────────────────────────────────────────
+
+def _is_url_value(v: str) -> bool:
+    """Return True if a value is a plain URL."""
+    return isinstance(v, str) and (v.startswith("http://") or v.startswith("https://"))
+
+
+def _format_data(data: dict) -> str:
+    """
+    Flatten data dict into a readable pipe-separated string.
+    - Skips raw URL-only values (report links, etc.)
+    - Caps each individual value at 60 chars to prevent table overflow
+    """
+    if not data:
+        return "—"
+    parts = []
+    for k, v in data.items():
+        sv = str(v)
+        if not sv or sv == "—" or _is_url_value(sv):
+            continue
+        # Truncate very long individual values
+        if len(sv) > 65:
+            sv = sv[:62] + "..."
+        parts.append(sv)
+    return "  |  ".join(parts[:3]) if parts else "—"
+
+
+def print_results_table(results: list):
+    table = Table(
+        box=box.ROUNDED,
+        border_style="color(54)",
+        header_style="bold bright_white on grey11",
+        show_lines=True,
+    )
+    table.add_column("SOURCE",       style="white",  no_wrap=True)
+    table.add_column("VERDICT",      no_wrap=True)
+    table.add_column("KEY FINDINGS", style="white",  max_width=72)
+
+    for r in results:
+        v         = r.get("verdict", "unknown")
+        color     = _VERDICT_COLOR.get(v) or "white"
+        label     = _TUI_VERDICT.get(v) or v.upper()
+        findings  = _format_data(r.get("data", {}))
+        if r.get("error") and v == "error":
+            findings = r["error"][:80]
+
+        table.add_row(
+            r.get("source", "?"),
+            Text(label, style=f"bold {color}"),
+            findings,
+        )
+
+    console.print(table)
+    console.print()
+
+
+# ─── Verdict Box ─────────────────────────────────────────────────────────────
+
+def _compute_verdict(results: list) -> dict:
+    """
+    Determine overall verdict from all results.
+
+    Verdict rules (analyst-friendly):
+      MALICIOUS  → ANY source says malicious
+      SUSPICIOUS → ANY source says suspicious (and none say malicious)
+      CLEAN      → ALL actionable sources say clean / not_found
+      UNKNOWN    → No actionable sources returned data
+
+    Sources with verdict "skipped", "error", "info", or "unknown" are NOT
+    counted as actionable (they didn't contribute a threat signal).
+    """
+    malicious_sources  = []
+    suspicious_sources = []
+    clean_sources      = []
+    error_parts        = []
+    total_actionable   = 0
+
+    for r in results:
+        v   = r.get("verdict", "unknown")
+        src = r.get("source", "?")
+        err = r.get("error")
+
+        if v == "skipped":
+            error_parts.append(f"{src} (No API key)")
+            continue
+        if v == "error":
+            reason = err or "Unknown error"
+            error_parts.append(f"{src} ({reason[:40]})")
+            continue
+        if v == "info":
+            continue
+        if v == "unknown":
+            continue
+
+        total_actionable += 1
+
+        if v == "malicious":
+            malicious_sources.append(src)
+        elif v == "suspicious":
+            suspicious_sources.append(src)
+        elif v in ("clean", "not_found"):
+            clean_sources.append(src)
+
+    # ── Verdict decision ─────────────────────────────────────────────────────
+    if malicious_sources:
+        verdict = "malicious"
+        agreed  = malicious_sources
+        count   = f"{len(malicious_sources)} of {total_actionable}"
+
+    elif suspicious_sources:
+        verdict = "suspicious"
+        agreed  = suspicious_sources
+        count   = f"{len(suspicious_sources)} of {total_actionable}"
+
+    elif total_actionable == 0:
+        verdict = "unknown"
+        agreed  = []
+        count   = "0"
+
+    else:
+        verdict = "clean"
+        agreed  = clean_sources
+        count   = f"{len(agreed)} of {total_actionable}"
+
+    return {
+        "verdict": verdict,
+        "agreed":  agreed,
+        "count":   count,
+        "errors":  error_parts,
+    }
+
+
+def print_verdict_box(results: list):
+    info    = _compute_verdict(results)
+    v       = info["verdict"]
+    color   = _VERDICT_COLOR.get(v, "white")
+    label   = _TUI_VERDICT.get(v, v.upper())
+
+    lines = Text()
+
+    # Line 1: VERDICT
+    lines.append(f"  {label}   ", style=f"bold {color}")
+    lines.append(f"({info['count']} sources agree)\n", style="white")
+
+    # Line 2: Agreed / Flagged by
+    if info["agreed"]:
+        flag_word = "Flagged" if v in ("malicious", "suspicious") else "Agreed"
+        lines.append(f"  {flag_word:8}: ", style="color(55)")
+        lines.append(", ".join(info["agreed"]) + "\n", style=f"bold {color}")
+
+    # Line 3+: Errors / skipped sources
+    if info["errors"]:
+        err_str = ", ".join(info["errors"])
+        lines.append(f"  {'Errors':8}: ", style="color(55)")
+        lines.append(err_str + "\n", style="yellow1")
+
+    console.print(Panel(
+        lines,
+        border_style=color,
+        title="[bold color(55)]// VERDICT[/bold color(55)]",
+        title_align="left",
+        box=box.ROUNDED,
+        padding=(0, 1),
+    ))
+    console.print()
+
+    return v  # returned for bulk summary
+
+
+# ─── Bulk Summary Table ───────────────────────────────────────────────────────
+
+def print_bulk_summary(rows: list):
+    """
+    rows: list of (index, ioc_value, ioc_type_label, verdict_str, top_hit)
+    """
+    console.print()
+    table = Table(
+        box=box.ROUNDED,
+        border_style="color(54)",
+        header_style="bold bright_white on grey11",
+        show_lines=True,
+    )
+    table.add_column("#",        width=4,  style="dim white")
+    table.add_column("IOC",      width=36, no_wrap=True, style="white")
+    table.add_column("TYPE",     width=14, style="white")
+    table.add_column("VERDICT",  width=18)
+    table.add_column("TOP HIT",  width=20, style="dim white")
+
+    counts = {"malicious": 0, "suspicious": 0, "clean": 0, "unknown": 0}
+
+    for idx, ioc_value, ioc_type, verdict, top_hit in rows:
+        color  = _VERDICT_COLOR.get(verdict) or "white"
+        label  = _TUI_VERDICT.get(verdict) or verdict.upper()
+        counts[verdict] = counts.get(verdict, 0) + 1
+        display_ioc = ioc_value if len(ioc_value) <= 36 else ioc_value[:33] + "..."
+        table.add_row(
+            str(idx),
+            display_ioc,
+            ioc_type,
+            Text(label, style=f"bold {color}"),
+            top_hit,
+        )
+
+    console.print(table)
+    console.print(
+        f"\n  [bold]Summary:[/bold]  "
+        f"[red1]{counts.get('malicious', 0)} Malicious[/red1]  |  "
+        f"[yellow1]{counts.get('suspicious', 0)} Suspicious[/yellow1]  |  "
+        f"[bright_green]{counts.get('clean', 0)} Clean[/bright_green]  |  "
+        f"[dim]{counts.get('unknown', 0)} Unknown[/dim]\n"
+    )
