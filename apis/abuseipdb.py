@@ -12,7 +12,7 @@ from apis.base import KeyPool, ThreatIntelClient
 _BASE   = "https://api.abuseipdb.com/api/v2"
 SOURCE  = "AbuseIPDB"
 _client = ThreatIntelClient(timeout=10, source=SOURCE)
-_pool   = KeyPool("ABUSEIPDB_KEY")   # loads ABUSEIPDB_KEY, ABUSEIPDB_KEY_2, _3 ...
+_pool   = KeyPool("ABUSEIPDB_KEY")
 
 
 def analyze_ip(value: str, proxies: dict) -> dict:
@@ -20,7 +20,7 @@ def analyze_ip(value: str, proxies: dict) -> dict:
         return {"source": SOURCE, "verdict": "skipped", "data": {}, "raw_response": None, "error": "No API key"}
 
     try:
-        ip   = value.split("/")[0]  # strip CIDR
+        ip   = value.split("/")[0]
         resp = _client.get(
             f"{_BASE}/check",
             key_pool=_pool,

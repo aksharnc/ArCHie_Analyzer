@@ -18,11 +18,8 @@ class IOC:
 
 
 # ─── Pattern Table ────────────────────────────────────────────────────────────
-# (ioc_type, compiled_regex, display_label)
-# Each pattern is tried in order — first match wins.
 
 _PATTERNS = [
-    # Hashes — most specific first (longest match)
     ("sha256",   re.compile(r"^[a-fA-F0-9]{64}$"),
                  "SHA-256 Hash"),
     ("sha1",     re.compile(r"^[a-fA-F0-9]{40}$"),
@@ -30,27 +27,21 @@ _PATTERNS = [
     ("md5",      re.compile(r"^[a-fA-F0-9]{32}$"),
                  "MD5 Hash"),
 
-    # CVE — must come before domain (CVE-2024-1234 could loosely match domain)
     ("cve",      re.compile(r"^CVE-\d{4}-\d{4,}$", re.IGNORECASE),
                  "CVE ID"),
 
-    # URL — must come before domain (full URL contains domain)
     ("url",      re.compile(r"^https?://[^\s]+", re.IGNORECASE),
                  "URL"),
 
-    # Email — must come before domain (email contains domain part)
     ("email",    re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"),
                  "Email Address"),
 
-    # IPv4 (with optional CIDR) — validated by _is_valid_ipv4() after regex match
     ("ipv4",     re.compile(r"^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$"),
                  "IPv4 Address"),
 
-    # Domain — loose check, must have dot and valid TLD
     ("domain",   re.compile(r"^([a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,}$"),
                  "Domain"),
 
-    # File paths: Windows (C:\), Unix (/), home (~), env (%TEMP%)
     ("filepath", re.compile(r"^([A-Za-z]:\\|/|~/|%[A-Z_]+%)"),
                  "File Path"),
 ]
@@ -83,7 +74,7 @@ def detect_single(raw: str) -> IOC:
 def detect_bulk(raw_input: str) -> List[IOC]:
     """
     Parse multi-line input. Each non-empty line is treated as a separate IOC.
-    Lines starting with # are ignored (comments).
+
     """
     results = []
     for line in raw_input.splitlines():

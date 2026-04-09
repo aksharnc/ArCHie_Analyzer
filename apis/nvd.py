@@ -13,12 +13,10 @@ from apis.base import KeyPool, ThreatIntelClient
 _BASE   = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 SOURCE  = "NVD"
 _client = ThreatIntelClient(timeout=20, source=SOURCE)
-_pool   = KeyPool("NVD_API_KEY")   # optional; loads NVD_API_KEY, NVD_API_KEY_2, _3 ...
+_pool   = KeyPool("NVD_API_KEY")
 
 
 def _headers() -> dict:
-    # NVD key goes in header; key_pool/key_header not used because the key is
-    # optional and there are no _no_key() guards in this module.
     key = _pool.current()
     if key:
         return {"apiKey": key}
@@ -48,14 +46,12 @@ def analyze_cve(value: str, proxies: dict) -> dict:
 
         cve = vulns[0].get("cve", {})
 
-        # Extract English description
         description = ""
         for d in cve.get("descriptions", []):
             if d.get("lang") == "en":
                 description = d.get("value", "")[:100]
                 break
 
-        # Extract CVSS score — prefer v3.1, then v3.0, then v2
         cvss_score = None
         severity   = "—"
         metrics    = cve.get("metrics", {})
@@ -67,20 +63,18 @@ def analyze_cve(value: str, proxies: dict) -> dict:
                 severity   = m.get("baseSeverity", "—")
                 break
 
-        # Verdict based on CVSS base score
         if cvss_score is not None:
             if cvss_score >= 9.0:
-                verdict = "malicious"    # Critical
+                verdict = "malicious"
             elif cvss_score >= 7.0:
-                verdict = "suspicious"   # High (requires auth / different conditions)
+                verdict = "suspicious"
             elif cvss_score >= 4.0:
-                verdict = "suspicious"   # Medium
+                verdict = "suspicious"
             else:
-                verdict = "clean"        # Low
+                verdict = "clean"
         else:
             verdict = "info"
 
-        # Published date
         published = cve.get("published", "—")[:10]
 
         return {

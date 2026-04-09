@@ -25,7 +25,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Ensure UTF-8 stdout/stderr on Windows (prevents UnicodeEncodeError with Rich)
 if sys.platform == "win32":
     import io
     if hasattr(sys.stdout, "buffer"):
@@ -33,11 +32,9 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "buffer"):
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-# Suppress only the InsecureRequestWarning we intentionally trigger via proxy
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Load .env from the project root
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 import proxy_manager
@@ -54,7 +51,6 @@ from output.renderer import (
 )
 
 # ─── API dispatch table ────────────────────────────────────────────────────────
-# Maps (ioc_type) -> list of (module_function, label) to call for that type
 
 def _build_dispatch():
     from apis import (
@@ -101,18 +97,14 @@ def _build_dispatch():
             (otx.analyze_url,          "OTX AlienVault"),
             (phishtank.analyze_url,    "PhishTank"),
         ],
-        "email": [
-            # Extracts domain and re-dispatches through domain handlers
-        ],
-        "filepath": [],   # Local analysis only
+        "email": [],
+        "filepath": [],
         "cve":      [(nvd.analyze_cve, "NVD")],
         "unknown":  [],
     }
 
 # ─── Source filter ──────────────────────────────────────────────────────────
 
-# All source labels that appear in the dispatch table.
-# Used by --list-sources and for validation.
 _ALL_SOURCES: list[str] = [
     "VirusTotal", "AbuseIPDB", "GreyNoise", "MalwareBazaar",
     "OTX AlienVault", "Hybrid Analysis", "URLScan.io", "PhishTank",
@@ -169,7 +161,6 @@ def _print_api_status() -> None:
         remaining   = r["remaining_today"]
         exhausted   = r["exhausted"]
 
-        # ── Status column ──
         if not configured:
             status_str = "[dim]NO KEY[/dim]"
         elif exhausted:
@@ -177,10 +168,8 @@ def _print_api_status() -> None:
         else:
             status_str = "[green]OK[/green]"
 
-        # Daily limit
         daily_str = f"{daily_lim:,}" if daily_lim is not None else "[dim]—[/dim]"
 
-        # Used today
         if exhausted:
             used_str = f"[bold red]{calls_today:,}[/bold red]"
         elif daily_lim and calls_today >= daily_lim * 0.80:
@@ -188,7 +177,6 @@ def _print_api_status() -> None:
         else:
             used_str = f"{calls_today:,}" if calls_today > 0 else "[dim]0[/dim]"
 
-        # Remaining daily
         if remaining is None:
             rem_str = "[dim]—[/dim]"
         elif remaining == 0:
@@ -208,7 +196,6 @@ def _print_api_status() -> None:
 
     console.print(tbl)
 
-    # ── Legend ──
     console.print(
         "  [dim]"
         "Status: [green]OK[/green] = key set  "
@@ -249,8 +236,8 @@ def _log_ioc(ioc: IOC, results: list, verdict: str):
 
 def _handle_interrupt(log_mode: str | None, output_fmt: str | None) -> None:
     """
-    Clean Ctrl+C handler — suppress the traceback, auto-save partial results,
-    and exit immediately.
+    Clean Ctrl+C handler — suppress the traceback, prompt the user for
+    what intermediate output to save, then exit.
     """
     console.print("\n\n  [yellow]⚠  Scan interrupted (Ctrl+C).[/yellow]")
 
@@ -259,14 +246,42 @@ def _handle_interrupt(log_mode: str | None, output_fmt: str | None) -> None:
         console.print("  [dim]No results collected yet. Exiting.[/dim]\n")
         sys.exit(0)
 
-    console.print(f"  [dim]{completed} IOC(s) completed before interrupt.[/dim]")
+    console.print(f"  [dim]{completed} IOC(s) completed before interrupt.[/dim]\n")
 
-    # Auto-save a summary log so partial work is never lost
-    _save_log("summary")
-    console.print("  [dim]Partial results saved to output/logs/json/.[/dim]")
+    console.print("  [bold white]Save partial results?[/bold white]")
+    console.print("  [cyan][1][/cyan]  Summary log   [dim](verdict + key findings)[/dim]")
+    console.print("  [cyan][2][/cyan]  Raw dump log   [dim](full API responses)[/dim]")
+    console.print("  [cyan][3][/cyan]  Export as CSV")
+    console.print("  [cyan][4][/cyan]  Export as JSON")
+    console.print("  [cyan][5][/cyan]  All of the above")
+    console.print("  [dim][0]  Skip — exit without saving[/dim]\n")
 
-    if output_fmt:
-        _export_results(output_fmt)
+    try:
+        choice = input("  Choice [1]: ").strip() or "1"
+    except (KeyboardInterrupt, EOFError):
+        console.print("\n  [dim]Exiting ArCHie Analyzer.[/dim]\n")
+        sys.exit(0)
+
+    choices = set(choice.replace(",", " ").split())
+    if "5" in choices:
+        choices = {"1", "2", "3", "4"}
+
+    if "0" in choices:
+        console.print("  [dim]No output saved. Exiting.[/dim]\n")
+        sys.exit(0)
+
+    if "1" in choices:
+        _save_log("summary")
+    if "2" in choices:
+        _save_log("raw")
+    if "3" in choices:
+        _export_results("csv")
+    if "4" in choices:
+        _export_results("json")
+
+    if not choices & {"1", "2", "3", "4"}:
+        _save_log("summary")
+        console.print("  [dim]Defaulted to summary log.[/dim]")
 
     console.print("  [dim]Exiting ArCHie Analyzer.[/dim]\n")
     sys.exit(0)
@@ -295,7 +310,6 @@ def _save_log(mode: str | None = None):
     log_file = log_dir / f"run_{ts}.json"
 
     if mode == "summary":
-        # Strip raw_response — keep only verdict + parsed data fields
         clean_iocs = []
         for entry in _run_log["iocs"]:
             clean_entry = {k: v for k, v in entry.items() if k != "sources"}
@@ -310,7 +324,7 @@ def _save_log(mode: str | None = None):
             "iocs":     clean_iocs,
             "summary":  _run_log["summary"],
         }
-    else:  # raw
+    else:
         _run_log["log_mode"] = "raw"
         data_to_write = _run_log
 
@@ -331,7 +345,6 @@ def analyze_ioc(ioc: IOC, proxies: dict, dispatch: dict, workers: int = 5) -> li
     """
     handlers = dispatch.get(ioc.ioc_type, [])
 
-    # Special case: email → extract domain
     if ioc.ioc_type == "email":
         domain_ioc = detect_single(ioc.value.split("@")[1])
         return analyze_ioc(domain_ioc, proxies, dispatch, workers)
@@ -352,13 +365,11 @@ def analyze_ioc(ioc: IOC, proxies: dict, dispatch: dict, workers: int = 5) -> li
 
     with ThreadPoolExecutor(max_workers=min(workers, len(handlers))) as pool:
         for fn, label in handlers:
-            # Cache hit → use cached result, skip the API call
             cached = ioc_cache.get(label, ioc.value)
             if cached is not None:
                 results.append(cached)
                 continue
 
-            # Rate-limit check + submit
             def _call(fn=fn, label=label):
                 rate_limiter.record(label)
                 return fn(ioc.value, proxies)
@@ -369,8 +380,6 @@ def analyze_ioc(ioc: IOC, proxies: dict, dispatch: dict, workers: int = 5) -> li
             label = futures_map[future]
             try:
                 result = future.result()
-                # Don't cache transient errors or skipped results — they shouldn't
-                # permanently block a real lookup until the cache TTL expires.
                 if result.get("verdict") not in ("error", "skipped"):
                     ioc_cache.set(label, ioc.value, result)
                 results.append(result)
@@ -383,7 +392,6 @@ def analyze_ioc(ioc: IOC, proxies: dict, dispatch: dict, workers: int = 5) -> li
                     "error":        str(e),
                 })
 
-    # Keep order consistent with dispatch table
     order = {label: i for i, (_, label) in enumerate(handlers)}
     results.sort(key=lambda r: order.get(r.get("source", ""), 99))
     return results
@@ -488,7 +496,6 @@ def run_bulk(raw_input: str, proxies: dict, dispatch: dict,
     summary_rows: list = []
 
     if verbose:
-        # ── Verbose mode: full per-IOC output ─────────────────────────────────
         with Progress(
             TextColumn("[dim]  [{task.completed}/{task.total}][/dim]"),
             BarColumn(bar_width=30, style="color(54)"),
@@ -512,7 +519,6 @@ def run_bulk(raw_input: str, proxies: dict, dispatch: dict,
                 progress.advance(task)
 
     else:
-        # ── Quiet mode: progress bar → bulk summary only (no per-IOC tables) ──
         with Progress(
             TextColumn("  [dim]{task.description}[/dim]"),
             BarColumn(bar_width=40, style="color(54)"),
@@ -531,7 +537,7 @@ def run_bulk(raw_input: str, proxies: dict, dispatch: dict,
                 summary_rows.append(_make_summary_row(i, ioc, results, verdict))
                 progress.advance(task)
 
-        console.print()  # breathing room after progress bar
+        console.print()
 
     console.rule("[bold white]BULK SUMMARY[/bold white]", style="dim white")
     print_bulk_summary(summary_rows)
@@ -544,8 +550,6 @@ def _cache_status_msg(ioc, dispatch: dict) -> str:
     Pre-check cache for every handler of this IOC type.
     Returns a coloured status line shown in verbose mode before analysis starts.
     """
-    # Resolve the effective IOC value/type for cache lookup
-    # (emails redirect to their domain, same as in analyze_ioc)
     check_value = ioc.value
     check_type  = ioc.ioc_type
     if check_type == "email" and "@" in ioc.value:
@@ -571,7 +575,7 @@ def _cache_status_msg(ioc, dispatch: dict) -> str:
 
 def _compute_verdict_str(results: list) -> str:
     """Return the overall verdict string for a results list (without printing)."""
-    from output.renderer import _compute_verdict  # noqa: PLC0415
+    from output.renderer import _compute_verdict
     return _compute_verdict(results)["verdict"]
 
 
@@ -700,7 +704,7 @@ def _interactive_menu(proxies: dict, dispatch: dict, verbose: bool, workers: int
             if verbose:
                 log_mode = _ask_log_mode()
             else:
-                log_mode = "summary"   # auto-save in quiet mode
+                log_mode = "summary"
             _init_log()
             run_single(raw, proxies, dispatch, verbose=verbose, workers=workers)
             _save_log(log_mode)
@@ -718,6 +722,7 @@ def _interactive_menu(proxies: dict, dispatch: dict, verbose: bool, workers: int
                 log_mode = _ask_log_mode()
             else:
                 log_mode = "summary"
+
             _init_log()
             run_bulk(path.read_text(encoding="utf-8"), proxies, dispatch,
                      verbose=verbose, workers=workers)
@@ -735,21 +740,13 @@ def main():
         description="ArCHie Analyzer -- Threat Intel CLI. Paste any IOC to analyze it.",
         epilog=(
             "Examples:\n"
-            "  archie                                        Interactive menu\n"
-            "  archie -i 45.33.32.156                        Single IOC (quiet)\n"
-            "  archie -i 1.2.3.4 -v                         Full real-time output\n"
-            "  archie -f iocs.txt                           Bulk from file (quiet)\n"
-            "  archie -f iocs.txt -v                        Bulk verbose (per-IOC tables)\n"
-            "  archie -f iocs.txt -o csv                    Export to output/logs/csv/\n"
-            "  archie -f iocs.txt -o json                   Export to output/logs/json/\n"
-            "  archie -i 1.2.3.4 -lr                        Full raw-dump log\n"
-            "  archie -i 1.2.3.4 -ls                        Summary-only log\n"
-            "  archie -i 1.2.3.4 -nc                        Bypass cache\n"
-            "  archie -f iocs.txt -w 10 -np                 10 workers, no proxy\n"
-            "  archie --api-status                          Show API key/usage dashboard\n"
-            "  archie --mark-exhausted \"VirusTotal\"          Flag VT quota as gone until midnight\n"
-            "  archie --clear-exhausted \"VirusTotal\"         Clear that flag\n"
-            "  archie --clear-exhausted all                 Clear all exhausted flags"
+            "  archie                          Interactive menu\n"
+            "  archie -i 1.2.3.4              Analyze single IOC\n"
+            "  archie -i 1.2.3.4 -v           Verbose output\n"
+            "  archie -f iocs.txt             Bulk from file\n"
+            "  archie -f iocs.txt -o csv      Export to CSV\n"
+            "  archie --api-status            API usage dashboard\n"
+            "  archie --list-sources          Show all source names"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -812,7 +809,6 @@ def main():
 
     args = parser.parse_args()
 
-    # ── List sources shortcut ──
     if args.list_sources:
         print_banner()
         console.print("  [bold white]Available source names[/bold white] (use with -s):\n")
@@ -821,16 +817,13 @@ def main():
         console.print()
         sys.exit(0)
 
-    # ── API status shortcut ──
     if args.api_status:
         print_banner()
         _print_api_status()
         sys.exit(0)
 
-    # ── Mark / clear exhausted ──
     if args.mark_exhausted:
         source = args.mark_exhausted.strip()
-        # Case-insensitive match against known sources
         match = next((s for s in _ALL_SOURCES if s.lower() == source.lower()), None)
         if not match:
             print_banner()
@@ -867,26 +860,21 @@ def main():
             )
         sys.exit(0)
 
-    # ── Cache setup ──
     if args.no_cache:
         ioc_cache.enable(False)
 
-    # ── Log mode ──
-    # In quiet mode (default), always save a summary log unless overridden.
-    # In verbose mode, honour explicit flags or default to no auto-save.
     if args.log_raw:
         cli_log_mode: str | None = "raw"
     elif args.log_summary:
         cli_log_mode = "summary"
     elif not args.verbose:
-        cli_log_mode = "summary"   # quiet mode: mandatory summary log
+        cli_log_mode = "summary"
     else:
         cli_log_mode = None
 
     _init_log()
     print_banner()
 
-    # ── Proxy startup ──
     if args.no_proxy:
         console.print("  [yellow][!] Running without proxy (--no-proxy)[/yellow]\n")
         proxies = {}
@@ -898,11 +886,9 @@ def main():
     dispatch = _build_dispatch()
     workers  = max(1, min(args.workers, 20))
 
-    # ── Source filter ──
     active_sources: list[str] = []
     if args.sources:
         active_sources = [s.strip() for s in args.sources.split(",") if s.strip()]
-        # Validate — warn on unrecognised names but don't abort
         known_lower = {n.lower() for n in _ALL_SOURCES}
         bad = [s for s in active_sources if s.lower() not in known_lower]
         if bad:
@@ -917,7 +903,6 @@ def main():
             + "[/dim]\n"
         )
 
-    # ── Dispatch based on flags ──
     try:
         if args.file:
             path = Path(args.file)
@@ -938,7 +923,6 @@ def main():
                 _export_results(args.output)
 
         else:
-            # No flags → show interactive menu
             _interactive_menu(proxies, dispatch,
                               verbose=args.verbose, workers=workers,
                               active_sources=active_sources or None)

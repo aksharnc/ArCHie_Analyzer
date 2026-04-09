@@ -14,7 +14,7 @@ from apis.base import KeyPool, ThreatIntelClient
 _BASE   = "https://checkurl.phishtank.com/checkurl/"
 SOURCE  = "PhishTank"
 _client = ThreatIntelClient(timeout=15, source=SOURCE)
-_pool   = KeyPool("PHISHTANK_KEY")   # loads PHISHTANK_KEY, PHISHTANK_KEY_2, _3 ...
+_pool   = KeyPool("PHISHTANK_KEY")
 
 
 def _no_key():
@@ -25,8 +25,6 @@ def analyze_url(value: str, proxies: dict) -> dict:
     if not _pool:
         return _no_key()
     try:
-        # PhishTank requires the key in the POST body, not headers.
-        # Key rotation is not supported (body keys can't be swapped by ThreatIntelClient).
         resp = _client.post(
             _BASE,
             data={
@@ -42,7 +40,7 @@ def analyze_url(value: str, proxies: dict) -> dict:
         result  = body.get("results", {})
 
         in_database = result.get("in_database", False)
-        valid       = result.get("valid", False)       # currently active phish
+        valid       = result.get("valid", False)
 
         if not in_database:
             return {
@@ -66,7 +64,6 @@ def analyze_url(value: str, proxies: dict) -> dict:
                 "error": None,
             }
         else:
-            # In database but no longer active / unverified
             return {
                 "source":  SOURCE,
                 "verdict": "suspicious",

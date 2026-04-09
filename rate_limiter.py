@@ -20,15 +20,12 @@ from pathlib import Path
 
 from rich.console import Console
 
-_console = Console(stderr=True, legacy_windows=False)
+_console = Console(legacy_windows=False)
 
-# Per-minute defaults per source (free-tier safe).
-# Override any value via .env:  RATE_LIMIT_VIRUSTOTAL=500
-# Set env var to 0 to disable throttling for that source entirely.
 _DEFAULTS: dict[str, int] = {
-    "VirusTotal":      4,     # Free: 4/min | Standard: 1 000/min | Premium: higher
+    "VirusTotal":      4,
     "AbuseIPDB":       60,
-    "GreyNoise":       3,     # Community: 50/day
+    "GreyNoise":       3,
     "MalwareBazaar":   30,
     "OTX AlienVault":  60,
     "Hybrid Analysis": 5,
@@ -39,7 +36,6 @@ _DEFAULTS: dict[str, int] = {
     "NVD":             5,
 }
 
-# Env-var name mapping:  source → RATE_LIMIT_<KEY>
 _ENV_KEYS: dict[str, str] = {
     "VirusTotal":      "RATE_LIMIT_VIRUSTOTAL",
     "AbuseIPDB":       "RATE_LIMIT_ABUSEIPDB",
@@ -54,10 +50,6 @@ _ENV_KEYS: dict[str, str] = {
     "NVD":             "RATE_LIMIT_NVD",
 }
 
-# Base env var name per source.  The rate limiter uses the same auto-scan
-# convention as KeyPool: it checks BASE, BASE_2, BASE_3 ... (stopping at first
-# gap) to count how many keys are active.  Adding e.g. VT_API_KEY_3 to .env
-# is all that's needed to have the limit auto-scale — no code changes required.
 _KEY_BASE_ENV: dict[str, str] = {
     "VirusTotal":      "VT_API_KEY",
     "AbuseIPDB":       "ABUSEIPDB_KEY",
@@ -71,22 +63,21 @@ _KEY_BASE_ENV: dict[str, str] = {
     "NVD":             "NVD_API_KEY",
 }
 
-# Free-tier daily call limits per source (None = no published limit / unlimited).
 _DAILY_LIMITS: dict[str, int | None] = {
     "VirusTotal":      500,
     "AbuseIPDB":       1_000,
-    "GreyNoise":       50,       # Community tier: 50/day
+    "GreyNoise":       50,
     "MalwareBazaar":   None,
     "OTX AlienVault":  None,
     "Hybrid Analysis": 200,
     "URLScan.io":      100,
     "PhishTank":       None,
-    "IPInfo":          1_667,    # ~50 k/month free → ≈1 667/day
+    "IPInfo":          1_667,
     "crt.sh":          None,
     "NVD":             None,
 }
 
-_MAX_KEY_SCAN = 10   # upper bound for numbered-suffix scanning
+_MAX_KEY_SCAN = 10
 
 
 def _count_active_keys(source: str, max_keys: int = _MAX_KEY_SCAN) -> int:
@@ -127,16 +118,15 @@ def _load_limits() -> dict[str, int | None]:
             raw = os.getenv(env_key, "").strip()
             if raw.isdigit():
                 val = int(raw)
-                limits[source] = val if val > 0 else None  # 0 → disabled
+                limits[source] = val if val > 0 else None
                 continue
-        # Scale the free-tier default by the number of configured keys.
         limits[source] = default * _count_active_keys(source)
     return limits
 
 
 _RATE_LIMITS: dict[str, int | None] = _load_limits()
 
-_WARN_AT = 0.80   # emit warning when this fraction of the limit is used
+_WARN_AT = 0.80
 
 
 class _SourceTracker:
@@ -147,7 +137,7 @@ class _SourceTracker:
         self._window: deque[float] = deque()
         self._lock           = threading.Lock()
         self._warned         = False
-        self._throttle_logged = False  # suppress repeated throttle messages
+        self._throttle_logged = False
 
     def _prune(self) -> None:
         cutoff = time.monotonic() - 60.0
@@ -155,9 +145,6 @@ class _SourceTracker:
             self._window.popleft()
 
     def record(self, source: str) -> None:
-        # Loop until the window has room — sleep is done OUTSIDE the lock so
-        # other threads can proceed rather than queuing serially behind a
-        # sleeping thread.
         while True:
             wait           = 0.0
             log_throttle   = False
@@ -167,17 +154,11 @@ class _SourceTracker:
                 current = len(self._window)
 
                 if current >= self._limit:
-                    oldest = self._window[0]
-                    wait   = 60.0 - (time.monotonic() - oldest) + 0.1
-                    if wait > 0:
-                        if not self._throttle_logged:
-                            log_throttle          = True
-                            self._throttle_logged = True
-                        # Release lock and sleep below
-                    else:
-                        wait = 0.0  # window already drained while we waited
+                    wait = 60.0
+                    if not self._throttle_logged:
+                        log_throttle          = True
+                        self._throttle_logged = True
                 else:
-                    # Approaching limit → warn once per filling window
                     usage = (current + 1) / self._limit
                     if usage >= _WARN_AT and not self._warned:
                         remaining = self._limit - current - 1
@@ -188,23 +169,23 @@ class _SourceTracker:
                         )
                         self._warned = True
                     elif usage < _WARN_AT:
-                        # Window has genuinely drained — reset both flags
                         self._warned          = False
                         self._throttle_logged = False
                     self._window.append(time.monotonic())
-                    return  # slot acquired, done
+                    return
 
-            # ── Lock released ── print + sleep outside so other threads
-            # can check their own windows concurrently.
             if log_throttle:
                 _console.print(
                     f"\n  [yellow]⏳  Rate limit reached for "
                     f"[bold]{source}[/bold]. "
-                    f"Throttling for up to {wait:.1f}s to stay within limits...[/yellow]\n"
+                    f"Cooling down for 60 s...[/yellow]\n"
                 )
             if wait > 0:
                 time.sleep(wait)
-            # Re-loop → re-lock → re-prune → try to claim a slot
+                with self._lock:
+                    self._window.clear()
+                    self._throttle_logged = False
+                    self._warned          = False
 
 
 class RateLimiter:
@@ -229,9 +210,8 @@ class RateLimiter:
             if source not in self._trackers:
                 self._trackers[source] = _SourceTracker(limit)
 
-        # Call record outside the creation lock to avoid holding it during sleep
         self._trackers[source].record(source)
-        daily_tracker.record(source)   # persist daily count
+        daily_tracker.record(source)
 
 
 # ─── Daily Usage Tracker ──────────────────────────────────────────────────────
@@ -271,7 +251,7 @@ class DailyUsageTracker:
                 encoding="utf-8",
             )
         except OSError:
-            pass  # Non-fatal — tracking is best-effort
+            pass
 
     def _reset_if_new_day(self) -> None:
         """Must be called with self._lock held."""
@@ -353,7 +333,7 @@ def get_api_status() -> list[dict]:
             configured = bool(os.getenv(key_base, "").strip())
             key_count = _count_active_keys(source) if configured else 0
         else:
-            configured = True   # no key required (e.g. crt.sh)
+            configured = True
             key_count  = 0
 
         per_min   = _RATE_LIMITS.get(source)
@@ -362,7 +342,6 @@ def get_api_status() -> list[dict]:
         calls_today = daily_counts.get(source, 0)
         exhausted   = source in exhausted_map
 
-        # If exhausted, remaining is definitively 0, regardless of local count
         if exhausted:
             remaining = 0
         elif daily_lim is not None:

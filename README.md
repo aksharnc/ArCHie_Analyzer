@@ -27,17 +27,12 @@ setx PATH "%PATH%;C:\Automations Stuff\ArCHie_Analyzer"
 # 4. Run
 archie                              # interactive menu
 archie -h                           # all CLI flags
-archie -i "45.33.32.156"            # single IOC (quiet)
-archie -i "45.33.32.156" -v         # single IOC verbose
+archie -i "45.33.32.156"            # analyze single IOC
+archie -i "45.33.32.156" -v         # verbose output
 archie -f tests/sample_iocs.txt     # bulk from file
-archie -f tests/sample_iocs.txt -v  # bulk verbose
-archie -i "1.2.3.4" -np             # skip proxy
-archie -i "1.2.3.4" -nc             # bypass cache
-archie -f iocs.txt -o csv           # export CSV to output/logs/csv/
-archie -f iocs.txt -o json          # export JSON to output/logs/json/
-archie -i "1.2.3.4" -lr             # full raw-dump log
-archie -i "1.2.3.4" -ls             # summary-only log
-archie -f iocs.txt -w 10 -np        # 10 workers, no proxy
+archie -f iocs.txt -o csv           # export CSV
+archie --api-status                 # API usage dashboard
+archie --list-sources               # show all source names
 ```
 
 > Java is required for the proxy. If `java` is not on PATH, the tool warns and runs without it.
@@ -47,15 +42,20 @@ archie -f iocs.txt -w 10 -np        # 10 workers, no proxy
 ## CLI Flags
 
 ```
--i,  --ioc         Single IOC to analyze
--f,  --file        Path to a file with one IOC per line
--v,  --verbose     Show per-API results as they arrive (default: quiet summary)
--np, --no-proxy    Skip the Java proxy (use direct connection)
--nc, --no-cache    Bypass the 24 h result cache
--w,  --workers     Thread pool size for concurrent API calls (default: 5)
--o,  --output      Export format: csv or json
--lr, --log-raw     Save full raw API dump to output/logs/json/
--ls, --log-summary Save summary log (parsed fields only) to output/logs/json/
+-i,  --ioc              Single IOC to analyze
+-f,  --file             Path to a file with one IOC per line
+-s,  --sources          Comma-separated source filter (e.g. "VirusTotal,AbuseIPDB")
+-v,  --verbose          Show per-API results as they arrive (default: quiet summary)
+-np, --no-proxy         Skip the Java proxy (use direct connection)
+-nc, --no-cache         Bypass the 24 h result cache
+-w,  --workers          Thread pool size for concurrent API calls (default: 5)
+-o,  --output           Export format: csv or json
+-lr, --log-raw          Save full raw API dump to output/logs/json/
+-ls, --log-summary      Save summary log (parsed fields only) to output/logs/json/
+     --api-status       Show API key config, daily usage, and remaining quota
+     --list-sources     Print all available source names
+     --mark-exhausted   Manually flag a source as exhausted until midnight
+     --clear-exhausted  Clear the exhausted flag for a source (or "all")
 ```
 
 ---
@@ -165,7 +165,8 @@ Logging is opt-in -- nothing is written unless you request it.
 |---|---|---|
 | Raw dump | `--log-raw` / `-lr` | IOC, type, verdict, parsed fields + full raw API response per source |
 | Summary | `--log-summary` / `-ls` | IOC, type, verdict, parsed fields (raw responses stripped) |
-| None | (default) | Nothing written |
+| Default (quiet) | (none) | Summary log auto-saved |
+| Default (verbose) | (none) | Nothing written |
 
 Logs are saved to `output/logs/json/run_<timestamp>.json`.
 

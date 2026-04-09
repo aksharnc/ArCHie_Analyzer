@@ -13,7 +13,7 @@ from apis.base import KeyPool, ThreatIntelClient
 _BASE   = "https://urlscan.io/api/v1"
 SOURCE  = "URLScan.io"
 _client = ThreatIntelClient(timeout=30, source=SOURCE)
-_pool   = KeyPool("URLSCAN_KEY")   # loads URLSCAN_KEY, URLSCAN_KEY_2, _3 ...
+_pool   = KeyPool("URLSCAN_KEY")
 
 
 def _no_key():
@@ -27,7 +27,7 @@ def _scan(value: str, proxies: dict) -> dict:
         key_pool=_pool,
         key_header="API-Key",
         headers={"Content-Type": "application/json"},
-        json={"url": value, "visibility": "unlisted"},  # don't expose analyst targets publicly
+        json={"url": value, "visibility": "unlisted"},
         proxies=proxies,
     )
     resp.raise_for_status()
@@ -45,9 +45,8 @@ def _poll_result(uuid: str, proxies: dict, retries: int = 8, delay: float = 3.0)
             )
             if resp.status_code == 200:
                 return resp.json()
-            # 404 means scan still processing; anything else is an error
             if resp.status_code not in (404, 200):
-                return {}  # abort early on 429 / 403 / 5xx — don't return false clean
+                return {}
         except Exception:
             pass
     return {}
@@ -102,14 +101,12 @@ def analyze_url(value: str, proxies: dict) -> dict:
             "error": None,
         }
     except requests.HTTPError as e:
-        # 400 = URLScan rejected the URL (private IP, unscannable domain, etc.)
         if e.response is not None and e.response.status_code == 400:
             try:
                 detail = e.response.json().get("message", "URLScan rejected this URL")
             except Exception:
                 detail = "URLScan rejected this URL (400)"
             return {"source": SOURCE, "verdict": "error", "data": {}, "raw_response": None, "error": detail}
-        # 429 = rate limited
         if e.response is not None and e.response.status_code == 429:
             return {"source": SOURCE, "verdict": "error", "data": {}, "raw_response": None, "error": "Rate limited (429)"}
         return {"source": SOURCE, "verdict": "error", "data": {}, "raw_response": None, "error": str(e)}

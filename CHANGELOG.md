@@ -4,6 +4,24 @@ All notable changes to ArCHie Analyzer are documented here.
 
 ---
 
+## v5.0 -- Polish & Stability
+
+### Added
+- **Ctrl+C output menu**: interrupting a scan now prompts for what to save (summary, raw, CSV, JSON, or all)
+- **API status dashboard**: `--api-status` shows key config, daily usage, and remaining quota per source
+- **Exhausted source management**: `--mark-exhausted` / `--clear-exhausted` to manually flag sources whose daily quota is gone
+
+### Fixed
+- **Rate limiter cooldown**: changed from variable sleep (random 23-57s) to a fixed 60s cooldown per source
+- **Throttle notifications**: all sources now show their throttle message (was only showing the first one)
+- **Rate limiter console output**: throttle warnings were printing to stderr and getting swallowed by the progress bar
+
+### Changed
+- Removed redundant inline comments across entire codebase
+- Version bump to v5.0
+
+---
+
 ## v4.0 -- Reliability, UX & Developer Experience
 
 ### Added

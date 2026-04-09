@@ -25,8 +25,6 @@ _PROXY_DIR     = _TOOL_DIR / "proxy"   # SimpleProxy.java/.class live here
 _proxy_process = None
 
 
-# ─── Private Helpers ──────────────────────────────────────────────────────────
-
 def _port_open(timeout: float = 1.0) -> bool:
     """Return True if something is already listening on port 8888."""
     try:
@@ -78,8 +76,6 @@ def _compile_if_needed(console) -> bool:
     return True
 
 
-# ─── Public API ───────────────────────────────────────────────────────────────
-
 def start(console=None) -> dict:
     """
     Start the embedded Java proxy (if not already running).
@@ -100,21 +96,17 @@ def start(console=None) -> dict:
         if console:
             console.print(msg)
 
-    # 1. Java available?
     if not _java_available():
         log("[yellow]  [!] Java not found -- running without proxy. Some URLs may be restricted.[/yellow]")
         return {"running": False, "proxies": {}, "message": "Java not found"}
 
-    # 2. Already running on port 8888?
     if _port_open():
         log(f"[green]  ✅ Proxy already live on port {PROXY_PORT}[/green]")
         return _success()
 
-    # 3. Compile if needed
     if not _compile_if_needed(console):
         return {"running": False, "proxies": {}, "message": "Compile failed"}
 
-    # 4. Launch
     log(f"[cyan]  🚀 Starting ArCHie proxy on port {PROXY_PORT}...[/cyan]")
     _proxy_process = subprocess.Popen(
         ["java", "SimpleProxy"],
@@ -124,7 +116,6 @@ def start(console=None) -> dict:
     )
     atexit.register(_kill_proxy)
 
-    # 5. Wait up to 5s for it to bind
     for _ in range(10):
         time.sleep(0.5)
         if _port_open():

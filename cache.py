@@ -53,11 +53,11 @@ def get(source: str, ioc_value: str) -> Optional[dict]:
             return None
         return entry.get("result")
     except Exception:
-        path.unlink(missing_ok=True)  # remove corrupt/unreadable file so the next run re-fetches
+        path.unlink(missing_ok=True)
         return None
 
 
-def set(source: str, ioc_value: str, result: dict) -> None:  # noqa: A001
+def set(source: str, ioc_value: str, result: dict) -> None:
     """Write *result* to cache. Cache write failures are silent."""
     if not _enabled:
         return
@@ -67,7 +67,7 @@ def set(source: str, ioc_value: str, result: dict) -> None:  # noqa: A001
         entry = {"cached_at": time.time(), "result": result}
         path.write_text(json.dumps(entry, default=str), encoding="utf-8")
     except Exception:
-        pass  # non-fatal
+        pass
 
 
 def flush() -> int:

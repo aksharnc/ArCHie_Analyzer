@@ -18,7 +18,7 @@ from rich         import box
 
 console = Console(legacy_windows=False)
 
-# --- Verdict colour + emoji mapping ------------------------------------------
+
 
 _TUI_VERDICT = {
     "malicious":  "[!] MALICIOUS",
@@ -42,7 +42,7 @@ _VERDICT_COLOR = {
     "unknown":    "dim",
 }
 
-# --- ASCII Banners (random on startup) ----------------------------------------
+
 
 _ASCII_BANNERS = [
     # 1: Big letter A - clean slash-art
@@ -50,7 +50,7 @@ _ASCII_BANNERS = [
       /\                 
      /  \           ArCHie  Analyzer
     / /\ \   -----------------------------
-   / /  \ \   Threat Intelligence  *  v4.0
+   / /  \ \   Threat Intelligence  *  v5.0
   /_/    \_\   IOC  |  Hash  |  IP  |  CVE""",
 
     # 2: Scan-line / matrix style
@@ -58,7 +58,7 @@ _ASCII_BANNERS = [
   > INITIALIZING THREAT INTEL ENGINE...
   +--------------------------------------+
   |  A r C H i e   A n a l y z e r       |
-  |  Threat Intelligence  CLI  v4.0      |
+  |  Threat Intelligence  CLI  v5.0      |
   |  IOC  .  Hash  .  Domain  .  CVE     |
   +--------------------------------------+
   > MODULES LOADED. READY.""",
@@ -68,35 +68,29 @@ _ASCII_BANNERS = [
        ###            ArCHie  Analyzer
       ####    ----------------------------------
      ##  ##
-    #######     Threat Intelligence  *  v4.0
+    #######     Threat Intelligence  *  v5.0
    ##     ##    IOC  .  Hash  .  Domain  .  CVE
   ##       ##""",
 ]
 
-
-# --- Banner -------------------------------------------------------------------
 
 def print_banner():
     art  = random.choice(_ASCII_BANNERS)
     text = Text()
     text.append(art, style="bold bright_white")
     text.append("\n  by Akshar  ", style="color(61)")
-    text.append("v4.0", style="medium_purple1")
+    text.append("v5.0", style="medium_purple1")
     text.append("  --  Threat Intel CLI", style="color(61)")
     console.print(text)
     console.print()
     console.print("  [color(61)]ArCHie Analyzer -- Made with [/color(61)][bold red]\u2764\ufe0f[/bold red][color(61)] by Akshar[/color(61)]\n")
 
 
-# --- IOC Header ---------------------------------------------------------------
-
 def print_ioc_header(ioc):
     console.print(f"  [bold white]IOC  [/bold white][dim]>>[/dim] [white]{ioc.value}[/white]")
     console.print(f"  [bold white]TYPE [/bold white][dim]>>[/dim] [white]{ioc.display_label}[/white]")
     console.print()
 
-
-# --- Results Table ------------------------------------------------------------
 
 _IOC_NOUN: dict[str, str] = {
     "ipv4":     "IP address",
@@ -131,7 +125,6 @@ def _format_data(data: dict, ioc_type: str = "", verdict: str = "") -> str:
 
     parts: list[str] = []
 
-    # VT-style detection count - must come first and be formatted specially
     detections = data.get("detections")
     if detections and isinstance(detections, str) and "/" in detections:
         noun = _IOC_NOUN.get(ioc_type, "indicator")
@@ -139,7 +132,7 @@ def _format_data(data: dict, ioc_type: str = "", verdict: str = "") -> str:
 
     for k, v in data.items():
         if k == "detections":
-            continue          # already handled above
+            continue
         sv = str(v)
         if not sv or sv == "-" or _is_url_value(sv):
             continue
@@ -178,8 +171,6 @@ def print_results_table(results: list, ioc_type: str = ""):
     console.print(table)
     console.print()
 
-
-# --- Verdict Box -------------------------------------------------------------
 
 def _compute_verdict(results: list) -> dict:
     """
@@ -226,7 +217,6 @@ def _compute_verdict(results: list) -> dict:
         elif v in ("clean", "not_found"):
             clean_sources.append(src)
 
-    # -- Verdict decision -----------------------------------------------------
     if malicious_sources:
         verdict = "malicious"
         agreed  = malicious_sources
@@ -263,17 +253,14 @@ def print_verdict_box(results: list):
 
     lines = Text()
 
-    # Line 1: VERDICT
     lines.append(f"  {label}   ", style=f"bold {color}")
     lines.append(f"({info['count']} sources agree)\n", style="white")
 
-    # Line 2: Agreed / Flagged by
     if info["agreed"]:
         flag_word = "Flagged" if v in ("malicious", "suspicious") else "Agreed"
         lines.append(f"  {flag_word:8}: ", style="color(55)")
         lines.append(", ".join(info["agreed"]) + "\n", style=f"bold {color}")
 
-    # Line 3+: Errors / skipped sources
     if info["errors"]:
         err_str = ", ".join(info["errors"])
         lines.append(f"  {'Errors':8}: ", style="color(55)")
@@ -289,10 +276,8 @@ def print_verdict_box(results: list):
     ))
     console.print()
 
-    return v  # returned for bulk summary
+    return v
 
-
-# --- Bulk Summary Table -------------------------------------------------------
 
 def print_bulk_summary(rows: list):
     """

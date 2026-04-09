@@ -11,14 +11,12 @@ from apis.base import KeyPool, ThreatIntelClient
 
 SOURCE  = "IPInfo"
 _client = ThreatIntelClient(timeout=8, source=SOURCE)
-_pool   = KeyPool("IPINFO_KEY")   # optional; loads IPINFO_KEY, IPINFO_KEY_2, _3 ...
+_pool   = KeyPool("IPINFO_KEY")
 
 
 def analyze_ip(value: str, proxies: dict) -> dict:
     try:
-        ip  = value.split("/")[0]   # strip CIDR
-        # Pass the key as Authorization: Bearer so it never appears in the URL
-        # (prevents leaking the token in exception messages or proxy access logs).
+        ip  = value.split("/")[0]
         key     = _pool.current()
         headers = {"Authorization": f"Bearer {key}"} if key else {}
         resp = _client.get(
@@ -30,7 +28,6 @@ def analyze_ip(value: str, proxies: dict) -> dict:
         d    = resp.json()
         org  = d.get("org", "—")
 
-        # IPInfo always returns geo — verdict is always INFO (not a threat feed)
         return {
             "source":  SOURCE,
             "verdict": "info",

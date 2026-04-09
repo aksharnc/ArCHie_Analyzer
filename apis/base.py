@@ -27,7 +27,7 @@ import requests
 
 from rate_limiter import daily_tracker, _RATE_LIMITS
 
-_KEY_COOLDOWN_SECS = 65   # how long a 429'd key sits out (slightly over 1 min)
+_KEY_COOLDOWN_SECS = 65
 
 
 class KeyPool:
@@ -52,7 +52,7 @@ class KeyPool:
             else:
                 break
         self._idx: int = 0
-        self._cooldowns: dict[int, float] = {}   # key_index -> monotonic time it cools off
+        self._cooldowns: dict[int, float] = {}
         self._lock = threading.Lock()
 
     def __bool__(self) -> bool:
@@ -130,7 +130,7 @@ class ThreatIntelClient:
     def __init__(self, timeout: int = 15, max_retries: int = 3, source: str = ""):
         self.timeout     = timeout
         self.max_retries = max_retries
-        self.source      = source      # used for live quota + exhaustion tracking
+        self.source      = source
         self._session    = requests.Session()
 
     def _request(
@@ -144,14 +144,11 @@ class ThreatIntelClient:
         kwargs.setdefault("timeout", self.timeout)
         kwargs.setdefault("verify", False)
 
-        # Scale retries with key pool size so we can cycle through all keys
-        # before giving up.  Minimum 4 attempts even with a single key.
         effective_retries = max(self.max_retries, len(key_pool) + 2) if key_pool else self.max_retries
 
         last_exc: Exception | None = None
 
         for attempt in range(effective_retries):
-            # If all keys are in cooldown, sleep until the earliest recovers
             if key_pool and key_pool.all_cooling():
                 wait = key_pool.next_available_in()
                 if wait > 0:
@@ -162,7 +159,6 @@ class ThreatIntelClient:
                     )
                     time.sleep(wait)
 
-            # Inject the currently active (non-cooling) key
             if key_pool and key_header:
                 headers = dict(kwargs.get("headers", {}))
                 headers[key_header] = key_pool.current()
@@ -172,14 +168,9 @@ class ThreatIntelClient:
                 resp = self._session.request(method, url, **kwargs)
 
                 if resp.status_code == 429:
-                    # Check if this is a daily-quota exhaustion (not just per-min)
                     if self.source:
                         self._check_daily_exhaustion(resp)
                     if key_pool and len(key_pool) > 0:
-                        # Only use the 65s per-key cooldown when rate limiting is
-                        # active for this source.  When the user has set
-                        # RATE_LIMIT_X=0 (unlimited mode) we just rotate
-                        # immediately — same fast behaviour as before.
                         rate_limiting_on = _RATE_LIMITS.get(self.source) is not None
                         if rate_limiting_on:
                             key_pool.mark_cooldown()
@@ -210,7 +201,6 @@ class ThreatIntelClient:
         If found, mark the source as exhausted in DailyUsageTracker so
         --api-status can show EXHAUSTED until midnight.
         """
-        # Common exhaustion phrases across APIs
         _EXHAUSTION_PHRASES = (
             "dailyquotaexceeded",
             "quota exceeded",
@@ -227,10 +217,9 @@ class ThreatIntelClient:
             if phrase in body:
                 daily_tracker.mark_exhausted(self.source, phrase)
                 return
-        # Also check Retry-After — a very large value signals daily exhaustion
         retry_after = resp.headers.get("retry-after", "")
         try:
-            if int(retry_after) >= 3600:   # ≥1 hour → treat as daily cap
+            if int(retry_after) >= 3600:
                 daily_tracker.mark_exhausted(self.source, f"retry-after={retry_after}s")
         except (ValueError, TypeError):
             pass

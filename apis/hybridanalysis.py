@@ -13,7 +13,7 @@ from apis.base import KeyPool, ThreatIntelClient
 _BASE   = "https://www.hybrid-analysis.com/api/v2"
 SOURCE  = "Hybrid Analysis"
 _client = ThreatIntelClient(timeout=20, source=SOURCE)
-_pool   = KeyPool("HYBRID_ANALYSIS_KEY")   # loads HYBRID_ANALYSIS_KEY, HYBRID_ANALYSIS_KEY_2, _3 ...
+_pool   = KeyPool("HYBRID_ANALYSIS_KEY")
 
 
 def _no_key():
@@ -24,7 +24,6 @@ def analyze_hash(value: str, proxies: dict) -> dict:
     if not _pool:
         return _no_key()
     try:
-        # POST /search/hashes — see Hybrid Analysis v2 API docs
         resp = _client.post(
             f"{_BASE}/search/hashes",
             key_pool=_pool,
@@ -51,7 +50,7 @@ def analyze_hash(value: str, proxies: dict) -> dict:
         report       = results[0]
         verdict_raw  = report.get("verdict", "") or ""
         threat_score = report.get("threat_score")
-        av_detect    = report.get("av_detect")        # AV detection %
+        av_detect    = report.get("av_detect")
         type_short   = report.get("type_short", "—")
 
         if verdict_raw == "malicious":

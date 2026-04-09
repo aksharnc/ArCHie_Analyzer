@@ -12,7 +12,7 @@ from apis.base import KeyPool, ThreatIntelClient
 _BASE   = "https://otx.alienvault.com/api/v1"
 SOURCE  = "OTX AlienVault"
 _client = ThreatIntelClient(timeout=12, source=SOURCE)
-_pool   = KeyPool("OTX_KEY")   # loads OTX_KEY, OTX_KEY_2, _3 ...
+_pool   = KeyPool("OTX_KEY")
 
 
 def _no_key():

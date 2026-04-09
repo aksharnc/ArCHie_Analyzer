@@ -12,7 +12,7 @@ from apis.base import KeyPool, ThreatIntelClient
 _BASE   = "https://api.greynoise.io/v3/community"
 SOURCE  = "GreyNoise"
 _client = ThreatIntelClient(timeout=10, source=SOURCE)
-_pool   = KeyPool("GREYNOISE_KEY")   # loads GREYNOISE_KEY, GREYNOISE_KEY_2, _3 ...
+_pool   = KeyPool("GREYNOISE_KEY")
 
 
 def analyze_ip(value: str, proxies: dict) -> dict:
@@ -20,7 +20,7 @@ def analyze_ip(value: str, proxies: dict) -> dict:
         return {"source": SOURCE, "verdict": "skipped", "data": {}, "raw_response": None, "error": "No API key"}
 
     try:
-        ip   = value.split("/")[0]  # strip CIDR
+        ip   = value.split("/")[0]
         resp = _client.get(
             f"{_BASE}/{ip}",
             key_pool=_pool,
@@ -28,7 +28,6 @@ def analyze_ip(value: str, proxies: dict) -> dict:
             proxies=proxies,
         )
 
-        # 404 = IP not seen by GreyNoise (not necessarily safe, just not observed)
         if resp.status_code == 404:
             return {
                 "source":  SOURCE,
@@ -41,13 +40,13 @@ def analyze_ip(value: str, proxies: dict) -> dict:
         resp.raise_for_status()
         d           = resp.json()
         noise       = d.get("noise", False)
-        riot        = d.get("riot", False)     # riot = known safe (CDN, Google, etc.)
-        gn_class    = d.get("classification", "unknown")  # malicious | benign | unknown
+        riot        = d.get("riot", False)
+        gn_class    = d.get("classification", "unknown")
         name        = d.get("name", "—")
         last_seen   = d.get("last_seen", "—")
 
         if riot:
-            verdict = "clean"   # RIOT = known good infrastructure
+            verdict = "clean"
         elif gn_class == "malicious":
             verdict = "malicious"
         elif gn_class == "benign" or not noise:
